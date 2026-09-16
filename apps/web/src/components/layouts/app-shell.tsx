@@ -7,7 +7,14 @@ export function AppShell({
 	...props
 }: React.ComponentProps<typeof SidebarProvider>) {
 	return (
-		<SidebarProvider {...props}>
+		<SidebarProvider
+			style={
+				{
+					"--header-height": "calc(var(--spacing) * 12)",
+				} as React.CSSProperties
+			}
+			{...props}
+		>
 			<AppSidebar />
 			<SidebarInset>{children}</SidebarInset>
 		</SidebarProvider>
