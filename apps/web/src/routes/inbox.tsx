@@ -5,8 +5,7 @@ import {
 } from "@san/ui/components/resizable";
 import { createFileRoute } from "@tanstack/react-router";
 import { InboxHeader } from "@/components/layouts/inbox/inbox-header";
-import { NoteList } from "@/components/notes/note-list";
-import { useNoteList } from "@/hooks/use-notes";
+import { NoteList, useNoteList } from "@/features/notes";
 
 export const Route = createFileRoute("/inbox")({
 	component: RouteComponent,

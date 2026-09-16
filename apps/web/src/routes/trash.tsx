@@ -6,8 +6,7 @@ import {
 import { createFileRoute } from "@tanstack/react-router";
 import { Trash01 } from "@untitledui/icons";
 import { InboxHeader } from "@/components/layouts/inbox/inbox-header";
-import { NoteList } from "@/components/notes/note-list";
-import { useNoteList } from "@/hooks/use-notes";
+import { NoteList, useNoteList } from "@/features/notes";
 
 export const Route = createFileRoute("/trash")({
 	component: RouteComponent,

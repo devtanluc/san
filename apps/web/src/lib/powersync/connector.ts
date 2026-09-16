@@ -2,30 +2,30 @@ import type {
 	CommonPowerSyncDatabase,
 	CrudEntry,
 	PowerSyncBackendConnector,
+	PowerSyncCredentials,
 } from "@powersync/web";
 import { UpdateType } from "@powersync/web";
 import type { PostgrestSingleResponse } from "@supabase/supabase-js";
 import { ENV } from "@/env";
-import { getSession, supabase } from "@/lib/supabase";
+import { ensureSession, supabase } from "@/lib/supabase";
 
-/// Postgres Response codes that we cannot recover from by retrying.
+/** Postgres response codes không thể cứu được bằng retry. */
 const FATAL_RESPONSE_CODES = [
-	// Class 22 — Data Exception
-	// Examples include data type mismatch.
-	new RegExp(/^22...$/),
-	// Class 23 — Integrity Constraint Violation.
-	// Examples include NOT NULL, FOREIGN KEY and UNIQUE violations.
-	new RegExp(/^23...$/),
-	// INSUFFICIENT PRIVILEGE - typically a row-level security violation
-	new RegExp(/^42501$/),
+	// Class 22 — Data Exception (sai kiểu dữ liệu...)
+	/^22...$/,
+	// Class 23 — Integrity Constraint Violation (NOT NULL, FK, UNIQUE...)
+	/^23...$/,
+	// INSUFFICIENT PRIVILEGE — thường là vi phạm row-level security
+	/^42501$/,
 ];
 
-async function fetchCredentials() {
-	const session = await getSession();
-
-	if (!session) {
-		throw new Error("Could not fetch Supabase credentials: no session");
-	}
+/**
+ * PowerSync gọi hàm này khi cần token mới (lúc connect và khi token sắp hết hạn).
+ * Dùng ensureSession() để nếu session bị mất thì tự đăng nhập ẩn danh lại,
+ * thay vì kẹt trong vòng lặp retry vô hạn.
+ */
+async function fetchCredentials(): Promise<PowerSyncCredentials> {
+	const session = await ensureSession();
 
 	return {
 		endpoint: ENV.VITE_POWERSYNC_URL,
@@ -38,12 +38,10 @@ async function fetchCredentials() {
 
 async function uploadData(database: CommonPowerSyncDatabase): Promise<void> {
 	const transaction = await database.getNextCrudTransaction();
-
-	if (!transaction) {
-		return;
-	}
+	if (!transaction) return;
 
 	let lastOp: CrudEntry | null = null;
+
 	try {
 		for (const op of transaction.crud) {
 			lastOp = op;
@@ -57,7 +55,7 @@ async function uploadData(database: CommonPowerSyncDatabase): Promise<void> {
 				case UpdateType.PATCH:
 					if (!op.opData) {
 						throw new Error(
-							`PATCH operation on table "${op.table}" (id: ${op.id}) is missing opData`,
+							`PATCH trên bảng "${op.table}" (id: ${op.id}) thiếu opData`,
 						);
 					}
 					result = await table.update(op.opData).eq("id", op.id);
@@ -68,33 +66,28 @@ async function uploadData(database: CommonPowerSyncDatabase): Promise<void> {
 			}
 
 			if (result.error) {
-				console.error(result.error);
-				result.error.message = `Could not update Supabase. Received error: ${result.error.message}`;
+				result.error.message = `Không update được Supabase: ${result.error.message}`;
 				throw result.error;
 			}
 		}
 
 		await transaction.complete();
-		// biome-ignore lint/suspicious/noExplicitAny: ignore
-	} catch (ex: any) {
-		console.debug(ex);
+	} catch (ex) {
+		const code = (ex as { code?: unknown }).code;
+
 		if (
-			typeof ex.code === "string" &&
-			FATAL_RESPONSE_CODES.some((regex) => regex.test(ex.code))
+			typeof code === "string" &&
+			FATAL_RESPONSE_CODES.some((regex) => regex.test(code))
 		) {
 			/**
-			 * Instead of blocking the queue with these errors,
-			 * discard the (rest of the) transaction.
-			 *
-			 * Note that these errors typically indicate a bug in the application.
-			 * If protecting against data loss is important, save the failing records
-			 * elsewhere instead of discarding, and/or notify the user.
+			 * Không block queue bằng các lỗi này — bỏ (phần còn lại của) transaction.
+			 * Các lỗi này thường là bug ứng dụng. Nếu chống mất dữ liệu là quan trọng,
+			 * hãy lưu record lỗi ra chỗ khác / báo cho user thay vì discard.
 			 */
-			console.error("Data upload error - discarding:", lastOp, ex);
+			console.error("Upload lỗi không thể retry — bỏ qua:", lastOp, ex);
 			await transaction.complete();
 		} else {
-			// Error may be retryable - e.g. network error or temporary server error.
-			// Throwing an error here causes this call to be retried after a delay.
+			// Lỗi mạng / lỗi server tạm thời — throw để PowerSync retry sau một khoảng delay.
 			throw ex;
 		}
 	}

@@ -7,7 +7,7 @@ import { createFileRoute } from "@tanstack/react-router";
 import { Loader2, Trash2 } from "lucide-react";
 import { useState, type FormEvent } from "react";
 
-import { trpc } from "@/utils/trpc";
+import { trpc } from "@/lib/trpc";
 
 type TodoId = number;
 

@@ -4,10 +4,9 @@ import {
 	ResizablePanelGroup,
 } from "@san/ui/components/resizable";
 import { createFileRoute } from "@tanstack/react-router";
-import { Archive } from "@untitledui/icons";
+import { Star01 } from "@untitledui/icons";
 import { InboxHeader } from "@/components/layouts/inbox/inbox-header";
-import { NoteList } from "@/components/notes/note-list";
-import { useNoteList } from "@/hooks/use-notes";
+import { NoteList, useNoteList } from "@/features/notes";
 
 export const Route = createFileRoute("/favorites")({
 	component: RouteComponent,
@@ -25,7 +24,7 @@ function RouteComponent() {
 				className="flex flex-col"
 			>
 				<InboxHeader />
-				<NoteList notes={notes} isLoading={isLoading} emptyIcon={Archive} />
+				<NoteList notes={notes} isLoading={isLoading} emptyIcon={Star01} />
 			</ResizablePanel>
 
 			<ResizableHandle />

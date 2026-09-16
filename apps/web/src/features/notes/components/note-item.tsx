@@ -25,10 +25,10 @@ import {
 	Trash01,
 	Trash04,
 } from "@untitledui/icons";
-import { formatDistanceToNow } from "date-fns";
 import type React from "react";
-import { useNoteActions } from "@/hooks/use-notes";
-import type { Note } from "@/lib/powersync/schema";
+import { formatDate } from "@/lib/utils";
+import { useNoteActions } from "../hooks/use-note-actions";
+import type { Note } from "../types";
 
 export function NoteItem({
 	note,
@@ -50,10 +50,7 @@ export function NoteItem({
 	const isFavorited = note.favorited_at !== null;
 	const isTrashed = note.trashed_at !== null;
 
-	const formattedUpdatedAt = formatDistanceToNow(new Date(note.updated_at), {
-		addSuffix: true,
-	});
-
+	const formattedUpdatedAt = formatDate(note.updated_at);
 	const showOrganizeActions = !isTrashed;
 
 	return (
@@ -67,7 +64,7 @@ export function NoteItem({
 					{isPinned && (
 						<Pin02 className="size-3.5 shrink-0 -translate-y-px fill-current text-foreground/80" />
 					)}
-					<span>{note.title}</span>
+					<span>{note.title || "Untitled note"}</span>
 				</ItemTitle>
 				<ItemDescription>{formattedUpdatedAt}</ItemDescription>
 			</ItemContent>
@@ -115,7 +112,7 @@ export function NoteItem({
 									disabled={pending}
 									onClick={() => toggleArchive(note)}
 								>
-									{isArchived ? <Archive /> : <Archive />}
+									<Archive />
 									<span>{isArchived ? "Unarchive" : "Archive"}</span>
 								</DropdownMenuItem>
 

@@ -2,7 +2,7 @@ import { Skeleton } from "@san/ui/components/skeleton";
 import { cn } from "@san/ui/lib/utils";
 import { File04 } from "@untitledui/icons";
 import type React from "react";
-import type { Note } from "@/lib/powersync/schema";
+import type { Note } from "../types";
 import { NoteItem } from "./note-item";
 
 type Props = {

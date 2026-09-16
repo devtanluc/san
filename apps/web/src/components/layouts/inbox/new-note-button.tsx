@@ -7,7 +7,7 @@ import {
 } from "@san/ui/components/tooltip";
 import { Loading02, Plus } from "@untitledui/icons";
 import type React from "react";
-import { useNoteActions } from "@/hooks/use-notes";
+import { useNoteActions } from "@/features/notes";
 
 export function NewNoteButton({
 	...props

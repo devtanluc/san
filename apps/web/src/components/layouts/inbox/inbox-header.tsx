@@ -2,7 +2,6 @@ import { cn } from "@san/ui/lib/utils";
 import type React from "react";
 import { InboxStatusSwitcher } from "./inbox-status-switcher";
 import { NewNoteButton } from "./new-note-button";
-import { NoteSortDropdown } from "./note-sort-button";
 
 export function InboxHeader({
 	className,
@@ -19,7 +18,6 @@ export function InboxHeader({
 			<InboxStatusSwitcher />
 
 			<div className="ml-auto flex items-center">
-				<NoteSortDropdown />
 				<NewNoteButton />
 			</div>
 		</header>

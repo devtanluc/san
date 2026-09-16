@@ -5,11 +5,11 @@ import {
 	HeadContent,
 	Outlet,
 } from "@tanstack/react-router";
-import { ThemeProvider } from "@/components/theme-provider";
-import type { trpc } from "@/utils/trpc";
+import { AppShell } from "@/components/layouts/app-shell";
+import { ThemeProvider } from "@/components/providers/theme-provider";
+import type { trpc } from "@/lib/trpc";
 
 import "../index.css";
-import { AppShell } from "@/components/layouts/app-shell";
 
 export interface RouterAppContext {
 	trpc: typeof trpc;

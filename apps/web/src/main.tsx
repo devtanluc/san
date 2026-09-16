@@ -1,11 +1,10 @@
 import { QueryClientProvider } from "@tanstack/react-query";
 import { createRouter, RouterProvider } from "@tanstack/react-router";
 import ReactDOM from "react-dom/client";
-
-import Loader from "./components/loader";
-import { PowerSyncProvider } from "./components/powersync-provider";
+import { Loader } from "@/components/loader";
+import { PowerSyncProvider } from "./components/providers/powersync-provider";
+import { queryClient, trpc } from "./lib/trpc";
 import { routeTree } from "./routeTree.gen";
-import { queryClient, trpc } from "./utils/trpc";
 
 const router = createRouter({
 	routeTree,
@@ -15,7 +14,9 @@ const router = createRouter({
 	context: { trpc, queryClient },
 	Wrap: function WrapComponent({ children }: { children: React.ReactNode }) {
 		return (
-			<QueryClientProvider client={queryClient}>{children}</QueryClientProvider>
+			<QueryClientProvider client={queryClient}>
+				<PowerSyncProvider>{children}</PowerSyncProvider>
+			</QueryClientProvider>
 		);
 	},
 });
@@ -34,9 +35,5 @@ if (!rootElement) {
 
 if (!rootElement.innerHTML) {
 	const root = ReactDOM.createRoot(rootElement);
-	root.render(
-		<PowerSyncProvider>
-			<RouterProvider router={router} />
-		</PowerSyncProvider>,
-	);
+	root.render(<RouterProvider router={router} />);
 }
