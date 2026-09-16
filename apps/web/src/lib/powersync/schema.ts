@@ -8,6 +8,7 @@ export const notes = sqliteTable("notes", {
 	title: text("title").notNull().default(""),
 	content: text("content").notNull().default(""),
 
+	favorited_at: text("favorited_at"),
 	pinned_at: text("pinned_at"),
 	archived_at: text("archived_at"),
 	trashed_at: text("trashed_at"),

@@ -1,7 +1,7 @@
 import { z } from "zod";
 
 export const noteStatusFilterSchema = z
-	.enum(["inbox", "archive", "trash"])
+	.enum(["inbox", "archive", "trash", "favorites"])
 	.default("inbox");
 
 export const noteSortSchema = z

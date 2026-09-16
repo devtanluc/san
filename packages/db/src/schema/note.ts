@@ -10,6 +10,7 @@ export const notes = pgTable("notes", {
 	title: text("title").notNull().default(""),
 	content: text("content").notNull().default(""),
 
+	favoritedAt: timestamp("favorited_at", { withTimezone: true }),
 	pinnedAt: timestamp("pinned_at", { withTimezone: true }),
 	archivedAt: timestamp("archived_at", { withTimezone: true }),
 	trashedAt: timestamp("trashed_at", { withTimezone: true }),

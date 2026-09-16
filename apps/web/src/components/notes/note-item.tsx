@@ -21,6 +21,7 @@ import {
 	Pin01,
 	Pin02,
 	RefreshCcw05,
+	Star01,
 	Trash01,
 	Trash04,
 } from "@untitledui/icons";
@@ -37,6 +38,7 @@ export function NoteItem({
 	const {
 		togglePin,
 		toggleArchive,
+		toggleFavorite,
 		toggleTrash,
 		deletePermanently,
 		isPending,
@@ -45,6 +47,7 @@ export function NoteItem({
 	const pending = isPending(note.id);
 	const isPinned = note.pinned_at !== null;
 	const isArchived = note.archived_at !== null;
+	const isFavorited = note.favorited_at !== null;
 	const isTrashed = note.trashed_at !== null;
 
 	const formattedUpdatedAt = formatDistanceToNow(new Date(note.updated_at), {
@@ -96,6 +99,16 @@ export function NoteItem({
 								>
 									{isPinned ? <Pin01 /> : <Pin02 />}
 									<span>{isPinned ? "Unpin" : "Pin"}</span>
+								</DropdownMenuItem>
+
+								<DropdownMenuItem
+									disabled={pending}
+									onClick={() => toggleFavorite(note)}
+								>
+									<Star01 />
+									<span>
+										{isFavorited ? "Remove from favorites" : "Add to favorites"}
+									</span>
 								</DropdownMenuItem>
 
 								<DropdownMenuItem

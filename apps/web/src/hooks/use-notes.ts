@@ -28,6 +28,8 @@ function getStatusCondition(status: NoteStatusFilter) {
 			return isNotNull(notes.trashed_at);
 		case "archive":
 			return and(isNull(notes.trashed_at), isNotNull(notes.archived_at));
+		case "favorites":
+			return and(isNull(notes.trashed_at), isNotNull(notes.favorited_at));
 		case "inbox":
 			return and(isNull(notes.trashed_at), isNull(notes.archived_at));
 	}
@@ -103,7 +105,12 @@ export function useNoteActions() {
 	const setNoteState = useCallback(
 		async (
 			id: string,
-			patch: Partial<Pick<NoteRow, "pinned_at" | "archived_at" | "trashed_at">>,
+			patch: Partial<
+				Pick<
+					NoteRow,
+					"pinned_at" | "archived_at" | "trashed_at" | "favorited_at"
+				>
+			>,
 		) => {
 			await db
 				.update(notes)
@@ -156,6 +163,17 @@ export function useNoteActions() {
 		[withPending, setNoteState],
 	);
 
+	const toggleFavorite = useCallback(
+		(note: Pick<NoteRow, "id" | "favorited_at">) =>
+			withPending(note.id, () =>
+				setNoteState(note.id, {
+					// favorite is independent — doesn't clear pin/archive/trash
+					favorited_at: note.favorited_at ? null : nowIso(),
+				}),
+			),
+		[withPending, setNoteState],
+	);
+
 	const toggleTrash = useCallback(
 		(note: Pick<NoteRow, "id" | "trashed_at">) =>
 			withPending(note.id, () => {
@@ -185,6 +203,7 @@ export function useNoteActions() {
 		isCreating,
 		togglePin,
 		toggleArchive,
+		toggleFavorite,
 		toggleTrash,
 		deletePermanently,
 		isPending,
