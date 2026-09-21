@@ -7,24 +7,25 @@
       "packages/*"
     ],
     "catalog": {
-      "zod": "^4.5.4",
-      "typescript": "^6.0.3",
+      "@tailwindcss/postcss": "^4.3.3",
+      "@trpc/client": "^11.18.0",
+      "@trpc/server": "^11.18.0",
       "@types/node": "^26.4.1",
-      "varlock": "1.18.0",
+      "@types/pg": "^8.23.1",
+      "@types/react": "^19.2.18",
+      "@types/react-dom": "^19.2.7",
+      "better-auth": "1.7.5",
+      "drizzle-orm": "^1.0.0-rc.4",
       "lucide-react": "^1.41.0",
       "next-themes": "^0.4.6",
       "react": "^19.2.8",
       "react-dom": "^19.2.8",
       "sonner": "^2.0.8",
-      "@trpc/server": "^11.18.0",
-      "@trpc/client": "^11.18.0",
-      "better-auth": "1.7.5",
-      "@tailwindcss/postcss": "^4.3.3",
-      "@types/react": "^19.2.18",
-      "@types/react-dom": "^19.2.7",
+      "superjson": "^2.2.6",
       "tailwindcss": "^4.3.3",
-      "drizzle-orm": "^1.0.0-rc.4",
-      "@types/pg": "^8.23.1"
+      "typescript": "^6.0.3",
+      "varlock": "1.18.0",
+      "zod": "^4.5.4"
     }
   },
   "type": "module",
@@ -44,6 +45,7 @@
   },
   "dependencies": {
     "drizzle-orm": "catalog:",
+    "superjson": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {

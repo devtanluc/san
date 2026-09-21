@@ -6,6 +6,7 @@
       "name": "san",
       "dependencies": {
         "drizzle-orm": "catalog:",
+        "superjson": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -47,6 +48,7 @@
         "react-dom": "catalog:",
         "sonner": "catalog:",
         "streamdown": "^2.6.0",
+        "superjson": "catalog:",
         "varlock": "catalog:",
         "zod": "catalog:",
       },
@@ -70,6 +72,7 @@
         "@trpc/server": "catalog:",
         "@types/pg": "catalog:",
         "drizzle-orm": "catalog:",
+        "superjson": "catalog:",
         "zod": "catalog:",
       },
       "devDependencies": {
@@ -152,6 +155,7 @@
     "react": "^19.2.8",
     "react-dom": "^19.2.8",
     "sonner": "^2.0.8",
+    "superjson": "^2.2.6",
     "tailwindcss": "^4.3.3",
     "typescript": "^6.0.3",
     "varlock": "1.18.0",
