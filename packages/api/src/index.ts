@@ -9,8 +9,10 @@ export const t = initTRPC.context<Context>().create({
 
 export const router = t.router;
 
+/** Không cần login - Dùng cho Feed, Profile, Post Detail bản khách */
 export const publicProcedure = t.procedure;
 
+//** Bắt buộc login - React, Follow, Reply, Write, mọi thứ trong (app) */
 export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 	if (!ctx.session) {
 		throw new TRPCError({
@@ -25,4 +27,14 @@ export const protectedProcedure = t.procedure.use(({ ctx, next }) => {
 			session: ctx.session,
 		},
 	});
+});
+
+/** Chặn user chưa xong onboarding */
+export const onboardedProcedure = protectedProcedure.use(({ ctx, next }) => {
+	if (!ctx.session.user.onboardingCompletedAt)
+		throw new TRPCError({
+			code: "PRECONDITION_FAILED",
+			message: "ONBOARDING_REQUIRED",
+		});
+	return next();
 });
