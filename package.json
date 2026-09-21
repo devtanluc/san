@@ -23,7 +23,7 @@
       "@types/react": "^19.2.18",
       "@types/react-dom": "^19.2.7",
       "tailwindcss": "^4.3.3",
-      "drizzle-orm": "^0.45.2",
+      "drizzle-orm": "^1.0.0-rc.4",
       "@types/pg": "^8.23.1"
     }
   },
@@ -43,6 +43,7 @@
     "check": "biome check --write ."
   },
   "dependencies": {
+    "drizzle-orm": "catalog:",
     "zod": "catalog:"
   },
   "devDependencies": {
