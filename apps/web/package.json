@@ -34,7 +34,8 @@
 		"streamdown": "^2.6.0",
 		"varlock": "catalog:",
 		"vite-plugin-pwa": "^1.3.0",
-		"zod": "catalog:"
+		"zod": "catalog:",
+		"superjson": "catalog:"
 	},
 	"devDependencies": {
 		"@san/config": "workspace:*",

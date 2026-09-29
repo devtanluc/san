@@ -15,7 +15,8 @@
 		"@trpc/server": "catalog:",
 		"@types/pg": "catalog:",
 		"drizzle-orm": "catalog:",
-		"zod": "catalog:"
+		"zod": "catalog:",
+		"superjson": "catalog:"
 	},
 	"devDependencies": {
 		"@san/config": "workspace:*",

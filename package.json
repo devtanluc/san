@@ -24,7 +24,8 @@
 			"@types/react-dom": "^19.2.7",
 			"tailwindcss": "^4.3.3",
 			"drizzle-orm": "1.0.0-rc.4",
-			"@types/pg": "^8.23.1"
+			"@types/pg": "^8.23.1",
+			"superjson": "^2.2.6"
 		}
 	},
 	"type": "module",
