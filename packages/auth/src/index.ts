@@ -25,6 +25,9 @@ export function createAuth(env: AuthConfig, database: Database, desktopOrigins: 
 				secure: true,
 				httpOnly: true,
 			},
+			// Tắt check cors khi không phải product.
+			// Thuận tiện cho việc test api với Bruno, Postman,...
+			disableOriginCheck: process.env.NODE_ENV !== "production",
 		},
 		plugins: [],
 	});

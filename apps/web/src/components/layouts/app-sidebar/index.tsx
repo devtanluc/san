@@ -1,0 +1,33 @@
+import {
+	Sidebar,
+	SidebarContent,
+	SidebarFooter,
+	SidebarHeader,
+	SidebarRail,
+	SidebarTrigger,
+} from "@san/ui/components/sidebar";
+import type React from "react";
+import { ModeToggle } from "@/components/mode-toggle";
+import UserMenu from "@/components/user-menu";
+import { NavFeeds } from "./nav-feeds";
+
+export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {
+	return (
+		<Sidebar {...props}>
+			<SidebarHeader className="h-(--header-height)">
+				<div className="flex items-center justify-between">
+					<h3 className="px-2 font-medium text-sm">san.</h3>
+					<SidebarTrigger />
+				</div>
+			</SidebarHeader>
+			<SidebarContent>
+				<NavFeeds />
+			</SidebarContent>
+			<SidebarFooter>
+				<ModeToggle />
+				<UserMenu />
+			</SidebarFooter>
+			<SidebarRail />
+		</Sidebar>
+	);
+}

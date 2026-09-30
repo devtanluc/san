@@ -1,7 +1,7 @@
 import { mergeProps } from "@base-ui/react/merge-props";
 import { useRender } from "@base-ui/react/use-render";
-import { cn } from "@san/ui/lib/utils";
 import { cva, type VariantProps } from "class-variance-authority";
+import { cn } from "cn";
 import type * as React from "react";
 
 function BubbleGroup({ className, ...props }: React.ComponentProps<"div">) {
@@ -58,7 +58,7 @@ function BubbleContent({ className, render, ...props }: useRender.ComponentProps
 		props: mergeProps<"div">(
 			{
 				className: cn(
-					"wrap-break-word w-fit min-w-0 max-w-full overflow-hidden rounded-none border border-transparent px-2.5 py-2 text-xs leading-relaxed group-data-[align=end]/bubble:self-end [button,a]:outline-none [button,a]:transition-colors [button,a]:focus-visible:border-ring [button,a]:focus-visible:ring-1 [button,a]:focus-visible:ring-ring/50 [button]:text-left",
+					"wrap-break-word w-fit min-w-0 max-w-full overflow-hidden rounded-xl border border-transparent px-3 py-2 text-sm leading-relaxed group-data-[align=end]/bubble:self-end [button,a]:outline-none [button,a]:transition-colors [button,a]:focus-visible:border-ring [button,a]:focus-visible:ring-3 [button,a]:focus-visible:ring-ring/50 [button]:text-left",
 					className,
 				),
 			},
@@ -72,7 +72,7 @@ function BubbleContent({ className, render, ...props }: useRender.ComponentProps
 }
 
 const bubbleReactionsVariants = cva(
-	"absolute z-10 flex w-fit shrink-0 items-center justify-center gap-1 rounded-none bg-muted px-1.5 py-0.5 text-xs ring-2 ring-card has-[button]:p-0",
+	"absolute z-10 flex w-fit shrink-0 items-center justify-center gap-1 rounded-full bg-muted px-1.5 py-0.5 text-sm ring-3 ring-card has-[button]:p-0",
 	{
 		variants: {
 			side: {

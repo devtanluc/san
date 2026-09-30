@@ -11,12 +11,14 @@
 	"dependencies": {
 		"@san/auth": "workspace:*",
 		"@san/db": "workspace:*",
+		"@san/validation": "workspace:*",
 		"@trpc/client": "catalog:",
 		"@trpc/server": "catalog:",
 		"@types/pg": "catalog:",
 		"drizzle-orm": "catalog:",
-		"zod": "catalog:",
-		"superjson": "catalog:"
+		"feedsmith": "^3.0.1",
+		"superjson": "catalog:",
+		"zod": "catalog:"
 	},
 	"devDependencies": {
 		"@san/config": "workspace:*",

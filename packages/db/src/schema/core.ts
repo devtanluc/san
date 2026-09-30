@@ -1,6 +1,9 @@
 import * as p from "drizzle-orm/pg-core";
 import { user } from "./auth";
 
+// Luôn dùng timestamptz để tránh lệch giờ khi đổi timezone/server
+const timestamptz = (name: string) => p.timestamp(name, { withTimezone: true });
+
 export const feedTypeEnum = p.pgEnum("feed_type", ["rss", "podcast", "youtube", "twitter"]);
 
 export const feed = p.pgTable(
@@ -16,9 +19,13 @@ export const feed = p.pgTable(
 		url: p.text().notNull(),
 		title: p.text().notNull(),
 		iconUrl: p.text("icon_url"),
-		createdAt: p.timestamp("created_at").notNull().defaultNow(),
+		// Metadata cho sync: dùng conditional GET (If-None-Match / If-Modified-Since)
+		etag: p.text(),
+		lastModified: p.text("last_modified"),
+		lastFetchedAt: timestamptz("last_fetched_at"),
+		createdAt: timestamptz("created_at").notNull().defaultNow(),
 	},
-	// Chặn user subscribe trùng 1 url 2 lần
+	// Chặn user subscribe trùng 1 url 2 lần (url phải được chuẩn hoá trước khi lưu)
 	(t) => [p.unique("feed_user_url_unique").on(t.userId, t.url)],
 );
 
@@ -31,6 +38,8 @@ export const item = p.pgTable(
 			.uuid("feed_id")
 			.notNull()
 			.references(() => feed.id, { onDelete: "cascade" }),
+		// <guid> / <id> của bài trong feed (nullable vì có feed không cung cấp)
+		guid: p.text(),
 		title: p.text().notNull(),
 		url: p.text().notNull(),
 		// Nội dung gốc từ RSS (HTML thuần)
@@ -38,17 +47,20 @@ export const item = p.pgTable(
 		// Nội dung đã làm sạch (dùng để hiển thị và đưa cho AI tóm tắt)
 		contentClean: p.text("content_clean"),
 		// Thời điểm bài được đăng (nullable vì có feed không cung cấp)
-		publishedAt: p.timestamp("published_at"),
+		publishedAt: timestamptz("published_at"),
 		// Thời điểm hệ thống fetch về
-		fetchedAt: p.timestamp("fetched_at").notNull().defaultNow(),
+		fetchedAt: timestamptz("fetched_at").notNull().defaultNow(),
 		isRead: p.boolean("is_read").notNull().default(false),
 		isFavorite: p.boolean("is_favorite").notNull().default(false),
 	},
 	(t) => [
-		// Cùng 1 feed không lưu trùng 1 url 2 lần -> dùng để dedup khi fetch RSS
+		// Dedup theo url (fallback khi feed không có guid)
 		p.unique("item_feed_url_unique").on(t.feedId, t.url),
-		// Sắp xếp timeline theo bài mới nhất
-		p.index("item_published_at_idx").on(t.publishedAt),
+		// Dedup theo guid (bền hơn url). Postgres cho phép nhiều NULL nên feed không guid vẫn ổn
+		p.unique("item_feed_guid_unique").on(t.feedId, t.guid),
+		// Timeline theo feed, bài mới nhất trước
+		// Khi query nên sort theo coalesce(published_at, fetched_at) vì published_at có thể null
+		p.index("item_feed_published_idx").on(t.feedId, t.publishedAt.desc()),
 	],
 );
 
@@ -65,7 +77,7 @@ export const summary = p.pgTable(
 		// Model đã dùng để tạo summary
 		model: p.text(),
 		// Thời điểm summary được tạo
-		generatedAt: p.timestamp("generated_at").notNull().defaultNow(),
+		generatedAt: timestamptz("generated_at").notNull().defaultNow(),
 	},
 	(t) => [
 		// Mỗi item chỉ có 1 summary
