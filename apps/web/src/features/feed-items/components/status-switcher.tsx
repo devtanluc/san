@@ -11,7 +11,7 @@ import { ChevronDownIcon, CircleDotIcon, InboxIcon } from "lucide-react";
 import type React from "react";
 
 const HOME_VIEW_OPTIONS: {
-	value: NonNullable<ListItemsInput["filter"]>;
+	value: ListItemsInput["filter"];
 	label: string;
 	icon: React.ComponentType<React.SVGProps<SVGSVGElement>>;
 }[] = [
@@ -20,8 +20,8 @@ const HOME_VIEW_OPTIONS: {
 ];
 
 type StatusSwitcherProps = React.ComponentProps<typeof Button> & {
-	value: NonNullable<ListItemsInput["filter"]>;
-	onValueChange: (value: NonNullable<ListItemsInput["filter"]>) => void;
+	value: ListItemsInput["filter"];
+	onValueChange: (value: ListItemsInput["filter"]) => void;
 };
 
 export function StatusSwitcher({ value, onValueChange, ...props }: StatusSwitcherProps) {

@@ -7,9 +7,9 @@ import {
 	SidebarTrigger,
 } from "@san/ui/components/sidebar";
 import type React from "react";
-import { ModeToggle } from "@/components/mode-toggle";
-import UserMenu from "@/components/user-menu";
-import { NavFeeds } from "./nav-feeds";
+import { ModeToggle } from "@/components/providers/mode-toggle";
+import UserMenu from "@/features/auth/components/user-menu";
+import { NavFeeds } from "../../../features/feeds/components/nav-feeds";
 import { NavMain } from "./nav-main";
 
 export function AppSidebar({ ...props }: React.ComponentProps<typeof Sidebar>) {

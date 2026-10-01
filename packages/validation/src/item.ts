@@ -25,6 +25,11 @@ export const getItemSchema = z.object({
 	id: itemIdSchema,
 });
 
+export const summarizeItemSchema = z.object({
+	id: itemIdSchema,
+	force: z.boolean().optional(),
+});
+
 export const setItemReadSchema = z.object({
 	id: itemIdSchema,
 	isRead: z.boolean(),
@@ -49,9 +54,20 @@ export const setItemTagsSchema = z.object({
 		.transform((ids) => [...new Set(ids)]),
 });
 
+export const itemByIdSchema = z.object({ id: z.uuid() });
+
+export const updateItemSchema = z
+	.object({
+		id: z.uuid(),
+		isRead: z.boolean().optional(),
+		isFavorite: z.boolean().optional(),
+	})
+	.refine((v) => v.isRead !== undefined || v.isFavorite !== undefined, "Nothing to update");
+
 export type ListItemsInput = z.input<typeof listItemsSchema>;
 export type ItemCursor = z.output<typeof itemCursorSchema>;
 export type SetItemReadInput = z.input<typeof setItemReadSchema>;
 export type SetItemFavoriteInput = z.input<typeof setItemFavoriteSchema>;
 export type MarkAllReadInput = z.input<typeof markAllReadSchema>;
 export type SetItemTagsInput = z.input<typeof setItemTagsSchema>;
+export type SummarizeItemInput = z.input<typeof summarizeItemSchema>;

@@ -20,7 +20,7 @@ import {
 import { Spinner } from "@san/ui/components/spinner";
 import { useLocation, useNavigate } from "@tanstack/react-router";
 import { ChevronRightIcon, MoreHorizontalIcon, NewspaperIcon, RefreshCcwIcon, TrashIcon } from "lucide-react";
-import { useDeleteFeed, useFeeds, useSyncFeed, useSyncingFeedIds } from "@/hooks/use-feeds";
+import { useDeleteFeed, useFeeds, useSyncFeed, useSyncingFeedIds } from "@/features/feeds/hooks/use-feeds";
 
 export function NavFeeds() {
 	const navigate = useNavigate();

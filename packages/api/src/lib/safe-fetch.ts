@@ -14,7 +14,6 @@ export class FeedSyncError extends Error {
 }
 
 const TIMEOUT_MS = 10_000;
-const MAX_BYTES = 5 * 1024 * 1024; // 5MB
 const MAX_REDIRECTS = 3;
 
 // * SSRF guard
@@ -66,15 +65,18 @@ async function assertPublicUrl(raw: string): Promise<void> {
 
 // * Fetch
 
-function mapNetworkError(e: unknown): FeedSyncError {
+const FEED_MAX_BYTES = 5 * 1024 * 1024; // 5MB
+const PAGE_MAX_BYTES = 3 * 1024 * 1024; // 3MB
+
+function mapNetworkError(e: unknown, what: string): FeedSyncError {
 	if (e instanceof FeedSyncError) return e;
 	if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
-		return new FeedSyncError("TIMEOUT", "Feed took too long to respond.");
+		return new FeedSyncError("TIMEOUT", `${what} took too long to respond.`);
 	}
-	return new FeedSyncError("NETWORK", "Could not reach the feed.");
+	return new FeedSyncError("NETWORK", `Could not reach the ${what.toLowerCase()}.`);
 }
 
-async function readLimited(res: Response): Promise<string> {
+async function readLimited(res: Response, maxBytes: number, what: string): Promise<string> {
 	const reader = res.body?.getReader();
 	if (!reader) return "";
 	const chunks: Uint8Array[] = [];
@@ -83,44 +85,34 @@ async function readLimited(res: Response): Promise<string> {
 		const { done, value } = await reader.read();
 		if (done) break;
 		total += value.byteLength;
-		if (total > MAX_BYTES) {
+		if (total > maxBytes) {
 			await reader.cancel();
-			throw new FeedSyncError("TOO_LARGE", "Feed is too large.");
+			throw new FeedSyncError("TOO_LARGE", `${what} is too large.`);
 		}
 		chunks.push(value);
 	}
 	return Buffer.concat(chunks).toString("utf8");
 }
 
-export type SafeFetchResult =
-	| { notModified: true }
-	| { notModified: false; body: string; etag: string | null; lastModified: string | null };
+type GuardedOptions = {
+	headers: Record<string, string>;
+	maxBytes: number;
+	what: "Feed" | "Page";
+	contentType?: RegExp; // nếu có, từ chối response không khớp trước khi đọc body
+};
 
-/**
- * Fetch feed với: chặn IP nội bộ (kiểm tra lại sau mỗi redirect), timeout, giới hạn dung lượng,
- * conditional GET (ETag / Last-Modified).
- *
- * Giới hạn đã biết: DNS được resolve 2 lần (lúc kiểm tra và lúc fetch) nên về lý thuyết còn
- * hở DNS rebinding. Muốn kín hoàn toàn thì dùng undici Agent với `connect.lookup` tự kiểm tra IP.
- */
-export async function safeFetchFeed(
-	rawUrl: string,
-	cond: { etag?: string | null; lastModified?: string | null } = {},
-): Promise<SafeFetchResult> {
+type GuardedResult = { notModified: true } | { notModified: false; body: string; res: Response };
+
+// Lõi chung: chặn IP nội bộ (kiểm tra lại sau mỗi redirect), timeout, giới hạn dung lượng
+async function fetchGuarded(rawUrl: string, opts: GuardedOptions): Promise<GuardedResult> {
 	const signal = AbortSignal.timeout(TIMEOUT_MS);
-	const headers: Record<string, string> = {
-		"User-Agent": "SanReader/1.0 (+feed sync)",
-		Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
-	};
-	if (cond.etag) headers["If-None-Match"] = cond.etag;
-	if (cond.lastModified) headers["If-Modified-Since"] = cond.lastModified;
 
 	let current = rawUrl;
 	for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
 		await assertPublicUrl(current);
 
 		try {
-			const res = await fetch(current, { redirect: "manual", signal, headers });
+			const res = await fetch(current, { redirect: "manual", signal, headers: opts.headers });
 
 			if (res.status === 304) return { notModified: true };
 
@@ -134,20 +126,61 @@ export async function safeFetchFeed(
 
 			if (!res.ok) {
 				await res.body?.cancel();
-				throw new FeedSyncError("HTTP_ERROR", `Feed returned HTTP ${res.status}.`);
+				throw new FeedSyncError("HTTP_ERROR", `${opts.what} returned HTTP ${res.status}.`);
 			}
 
-			const body = await readLimited(res);
-			return {
-				notModified: false,
-				body,
-				etag: res.headers.get("etag"),
-				lastModified: res.headers.get("last-modified"),
-			};
+			if (opts.contentType && !opts.contentType.test(res.headers.get("content-type") ?? "")) {
+				await res.body?.cancel();
+				throw new FeedSyncError("HTTP_ERROR", `${opts.what} is not an HTML document.`);
+			}
+
+			const body = await readLimited(res, opts.maxBytes, opts.what);
+			return { notModified: false, body, res };
 		} catch (e) {
-			throw mapNetworkError(e);
+			throw mapNetworkError(e, opts.what);
 		}
 	}
 
 	throw new FeedSyncError("HTTP_ERROR", "Too many redirects.");
+}
+
+export type SafeFetchResult =
+	| { notModified: true }
+	| { notModified: false; body: string; etag: string | null; lastModified: string | null };
+
+export async function safeFetchFeed(
+	rawUrl: string,
+	cond: { etag?: string | null; lastModified?: string | null } = {},
+): Promise<SafeFetchResult> {
+	const headers: Record<string, string> = {
+		"User-Agent": "SanReader/1.0 (+feed sync)",
+		Accept: "application/rss+xml, application/atom+xml, application/xml, text/xml;q=0.9, */*;q=0.5",
+	};
+	if (cond.etag) headers["If-None-Match"] = cond.etag;
+	if (cond.lastModified) headers["If-Modified-Since"] = cond.lastModified;
+
+	const r = await fetchGuarded(rawUrl, { headers, maxBytes: FEED_MAX_BYTES, what: "Feed" });
+	if (r.notModified) return { notModified: true };
+
+	return {
+		notModified: false,
+		body: r.body,
+		etag: r.res.headers.get("etag"),
+		lastModified: r.res.headers.get("last-modified"),
+	};
+}
+
+// Tải trang bài viết gốc (HTML) để trích toàn văn
+export async function safeFetchPage(rawUrl: string): Promise<string> {
+	const r = await fetchGuarded(rawUrl, {
+		headers: {
+			"User-Agent": "Mozilla/5.0 (compatible; SanReader/1.0)",
+			Accept: "text/html,application/xhtml+xml",
+		},
+		maxBytes: PAGE_MAX_BYTES,
+		what: "Page",
+		contentType: /html/i,
+	});
+	if (r.notModified) throw new FeedSyncError("HTTP_ERROR", "Unexpected 304.");
+	return r.body;
 }

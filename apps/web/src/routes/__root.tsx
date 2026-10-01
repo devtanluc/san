@@ -2,10 +2,11 @@ import { Toaster } from "@san/ui/components/sonner";
 import type { QueryClient } from "@tanstack/react-query";
 import { ReactQueryDevtools } from "@tanstack/react-query-devtools";
 import { createRootRouteWithContext, HeadContent, Outlet } from "@tanstack/react-router";
-import { ThemeProvider } from "@/components/theme-provider";
+import { ThemeProvider } from "@/components/providers/theme-provider";
 import type { trpc } from "@/lib/trpc";
 
 import "../index.css";
+import "../typeset.css";
 
 export interface RouterAppContext {
 	trpc: typeof trpc;

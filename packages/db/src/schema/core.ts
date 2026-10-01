@@ -42,6 +42,12 @@ export const item = p.pgTable(
 		guid: p.text(),
 		title: p.text().notNull(),
 		url: p.text().notNull(),
+		// item
+		author: p.text(),
+		imageUrl: p.text("image_url"),
+		enclosureUrl: p.text("enclosure_url"), // file audio cho podcast
+		enclosureType: p.text("enclosure_type"),
+		durationSec: p.integer("duration_sec"),
 		// Nội dung gốc từ RSS (HTML thuần)
 		contentRaw: p.text("content_raw"),
 		// Nội dung đã làm sạch (dùng để hiển thị và đưa cho AI tóm tắt)

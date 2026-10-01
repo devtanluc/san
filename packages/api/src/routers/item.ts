@@ -6,11 +6,15 @@ import {
 	setItemFavoriteSchema,
 	setItemReadSchema,
 	setItemTagsSchema,
+	summarizeItemSchema,
 } from "@san/validation";
 import { TRPCError } from "@trpc/server";
 import { and, desc, eq, exists, inArray, sql } from "drizzle-orm";
 import type { Context } from "../context";
 import { protectedProcedure, router } from "../index";
+import { htmlToPlainText } from "../lib/html-to-plain-text";
+import { extractArticleHtml } from "../services/extract-article";
+import { generateItemSummary } from "../services/summarize-item";
 
 type Db = Context["db"];
 // Cho phép truyền cả db lẫn transaction
@@ -103,7 +107,10 @@ export const itemRouter = router({
 				feedIconUrl: feed.iconUrl,
 				title: item.title,
 				url: item.url,
+				author: item.author,
+				imageUrl: item.imageUrl,
 				contentClean: item.contentClean,
+				contentRaw: item.contentRaw,
 				publishedAt: item.publishedAt,
 				fetchedAt: item.fetchedAt,
 				isRead: item.isRead,
@@ -127,23 +134,108 @@ export const itemRouter = router({
 			.where(and(eq(itemTag.itemId, row.id), eq(tag.userId, userId)))
 			.orderBy(tag.name);
 
+		const { contentRaw: _contentRaw, summaryText, summaryModel, summaryGeneratedAt, ...rest } = row;
+		const text = htmlToPlainText(row.contentClean ?? row.contentRaw);
+		// Chưa có bản toàn văn và nội dung từ feed ngắn -> nhiều khả năng chỉ là mô tả
+		const needsFullContent = row.contentClean === null && (text?.length ?? 0) < 1000;
+		const isFullArticle = row.contentClean !== null;
+
 		return {
-			id: row.id,
-			feedId: row.feedId,
-			feedTitle: row.feedTitle,
-			feedIconUrl: row.feedIconUrl,
-			title: row.title,
-			url: row.url,
-			contentClean: row.contentClean,
-			publishedAt: row.publishedAt,
-			fetchedAt: row.fetchedAt,
-			isRead: row.isRead,
-			isFavorite: row.isFavorite,
-			summary: row.summaryText
-				? { text: row.summaryText, model: row.summaryModel, generatedAt: row.summaryGeneratedAt }
-				: null,
+			...rest,
+			// Plain text: dùng làm fallback (nội dung từ feed) và cho kiểm tra độ dài
+			contentText: text,
+			// HTML sạch: chỉ có khi đã trích toàn văn
+			contentHtml: isFullArticle ? row.contentClean : null,
+			needsFullContent,
+			summary: summaryText ? { text: summaryText, model: summaryModel, generatedAt: summaryGeneratedAt } : null,
 			tags,
 		};
+	}),
+
+	// Tải trang gốc, trích toàn văn, lưu vào contentClean. Lỗi (chặn bot, cần JS...) thì giữ nguyên,
+	// client tiếp tục hiển thị nội dung từ feed.
+	fetchFullContent: protectedProcedure.input(getItemSchema).mutation(async ({ input, ctx }) => {
+		const [row] = await ctx.db
+			.select({ id: item.id, url: item.url, contentClean: item.contentClean })
+			.from(item)
+			.where(and(eq(item.id, input.id), inArray(item.feedId, ownedFeedIds(ctx.db, ctx.session.user.id))))
+			.limit(1);
+
+		if (!row) throw notFound();
+		if (row.contentClean) return { ok: true as const };
+
+		try {
+			const clean = await extractArticleHtml(row.url);
+			if (!clean) return { ok: false as const };
+			await ctx.db.update(item).set({ contentClean: clean }).where(eq(item.id, row.id));
+			return { ok: true as const };
+		} catch {
+			return { ok: false as const };
+		}
+	}),
+
+	// Tạo (hoặc lấy lại) bản tóm tắt AI. force=true thì generate lại dù đã có.
+	summarize: protectedProcedure.input(summarizeItemSchema).mutation(async ({ input, ctx }) => {
+		const userId = ctx.session.user.id;
+
+		const [row] = await ctx.db
+			.select({
+				id: item.id,
+				title: item.title,
+				contentClean: item.contentClean,
+				contentRaw: item.contentRaw,
+				summaryText: summary.summaryText,
+				summaryModel: summary.model,
+				summaryGeneratedAt: summary.generatedAt,
+			})
+			.from(item)
+			.innerJoin(feed, eq(feed.id, item.feedId))
+			.leftJoin(summary, eq(summary.itemId, item.id))
+			.where(and(eq(item.id, input.id), eq(feed.userId, userId)))
+			.limit(1);
+
+		if (!row) throw notFound();
+
+		if (row.summaryText && !input.force) {
+			return { text: row.summaryText, model: row.summaryModel, generatedAt: row.summaryGeneratedAt };
+		}
+
+		const content = htmlToPlainText(row.contentClean ?? row.contentRaw);
+		if (!content) {
+			throw new TRPCError({ code: "BAD_REQUEST", message: "This item has no content to summarize." });
+		}
+
+		let generated: { text: string; model: string };
+		try {
+			generated = await generateItemSummary({ title: row.title, content });
+		} catch {
+			throw new TRPCError({ code: "INTERNAL_SERVER_ERROR", message: "Failed to generate summary." });
+		}
+
+		const generatedAt = new Date();
+		const [saved] = await ctx.db
+			.insert(summary)
+			.values({
+				itemId: row.id,
+				summaryText: generated.text,
+				model: generated.model,
+				generatedAt,
+			})
+			.onConflictDoUpdate({
+				target: summary.itemId,
+				set: {
+					summaryText: generated.text,
+					model: generated.model,
+					generatedAt,
+				},
+			})
+			.returning({
+				text: summary.summaryText,
+				model: summary.model,
+				generatedAt: summary.generatedAt,
+			});
+
+		return saved;
 	}),
 
 	setRead: protectedProcedure.input(setItemReadSchema).mutation(async ({ input, ctx }) => {

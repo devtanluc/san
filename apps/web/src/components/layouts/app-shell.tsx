@@ -2,7 +2,7 @@ import { SidebarInset, SidebarProvider } from "@san/ui/components/sidebar";
 import type React from "react";
 import { AppSidebar } from "./app-sidebar";
 
-export function AppShell({ children, ...props }: React.ComponentProps<typeof SidebarProvider>) {
+export function AppShell({ className, children, ...props }: React.ComponentProps<typeof SidebarProvider>) {
 	return (
 		<SidebarProvider
 			style={
@@ -13,7 +13,7 @@ export function AppShell({ children, ...props }: React.ComponentProps<typeof Sid
 			{...props}
 		>
 			<AppSidebar />
-			<SidebarInset>{children}</SidebarInset>
+			<SidebarInset className="h-dvh overflow-hidden">{children}</SidebarInset>
 		</SidebarProvider>
 	);
 }
