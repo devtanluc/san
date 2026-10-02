@@ -161,7 +161,7 @@ export type SyncResult = { inserted: number; notModified: boolean };
 export async function syncFeed(db: Db, row: FeedRow): Promise<SyncResult> {
 	const res = await safeFetchFeed(row.url, { etag: row.etag, lastModified: row.lastModified });
 
-	if (res.notModified) {
+	if (!("body" in res)) {
 		await db.update(feed).set({ lastFetchedAt: new Date() }).where(eq(feed.id, row.id));
 		return { inserted: 0, notModified: true };
 	}

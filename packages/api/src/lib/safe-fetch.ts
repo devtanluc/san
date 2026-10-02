@@ -118,8 +118,9 @@ export async function safeFetchFeed(
 	if (cond.etag) headers["If-None-Match"] = cond.etag;
 	if (cond.lastModified) headers["If-Modified-Since"] = cond.lastModified;
 
+	// safeFetchFeed
 	const r = await fetchGuarded(rawUrl, { headers, maxBytes: FEED_MAX_BYTES, what: "Feed" });
-	if (r.notModified) return { notModified: true };
+	if (!("body" in r)) return { notModified: true };
 
 	return {
 		notModified: false,
@@ -140,6 +141,6 @@ export async function safeFetchPage(rawUrl: string): Promise<string> {
 		what: "Page",
 		contentType: /html/i,
 	});
-	if (r.notModified) throw new FeedSyncError("HTTP_ERROR", "Unexpected 304.");
+	if (!("body" in r)) throw new FeedSyncError("HTTP_ERROR", "Unexpected 304.");
 	return r.body;
 }

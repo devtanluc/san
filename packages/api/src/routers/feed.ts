@@ -98,9 +98,12 @@ export const feedRouter = router({
 	create: protectedProcedure.input(createFeedSchema).mutation(async ({ input, ctx }) => {
 		const userId = ctx.session.user.id;
 
+		const { url, title, type } = input;
+		if (!url) throw new TRPCError({ code: "BAD_REQUEST", message: "Invalid feed url." });
+
 		const [created] = await ctx.db
 			.insert(feed)
-			.values({ ...input, userId })
+			.values({ userId, url, title, type })
 			.onConflictDoNothing({ target: [feed.userId, feed.url] })
 			.returning();
 
