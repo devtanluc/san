@@ -15,21 +15,23 @@ import {
 	parseRssFeed,
 } from "feedsmith";
 import type { Context } from "../context";
+import { htmlToPlainText } from "../lib/html-to-plain-text";
 import { FeedSyncError, safeFetchFeed } from "../lib/safe-fetch";
 
 type Db = Context["db"];
 type FeedRow = typeof feed.$inferSelect;
 
 const MAX_ITEMS_PER_SYNC = 200;
+const MAX_FUTURE_MS = 60 * 60 * 1000; // cho phép lệch giờ tối đa 1 tiếng
 
-// * Parse (feedsmith 3.x)
+// * Parse
 
 // Bài viết đã được chuẩn hoá về 1 dạng chung, bất kể feed là RSS, RDF, Atom hay JSON Feed
 type RawItem = {
 	guid: string | null;
 	url: string | null;
 	title: string | null;
-	content: string | null;
+	content: string | null; // luôn là HTML (hoặc null)
 	publishedAt: Date | null;
 };
 
@@ -52,6 +54,18 @@ function detectFormat(body: string): FeedFormat | undefined {
 	if (detectAtomFeed(body)) return "atom";
 	if (detectRdfFeed(body)) return "rdf";
 	return undefined;
+}
+
+function escapeHtml(s: string): string {
+	return s.replace(/&/g, "&amp;").replace(/</g, "&lt;").replace(/>/g, "&gt;");
+}
+
+// Text thuần -> HTML đơn giản để pipeline phía sau xử lý thống nhất
+function textToHtml(s: string): string {
+	return escapeHtml(s)
+		.split(/\n{2,}/)
+		.map((p) => `<p>${p.replace(/\n/g, "<br>")}</p>`)
+		.join("");
 }
 
 function extractItems(body: string): RawItem[] {
@@ -90,11 +104,17 @@ function extractItems(body: string): RawItem[] {
 				// Link của bài là rel="alternate" (hoặc không có rel), khác với rel="self", "edit"...
 				const link =
 					entry.links?.find((l) => !l.rel || l.rel === "alternate")?.href ?? entry.links?.[0]?.href ?? null;
+
+				const raw = entry.content?.value ?? entry.summary?.value ?? null;
+				const type = (entry.content?.value ? entry.content.type : entry.summary?.type) ?? "text";
+				// Atom mặc định type="text": đó là text thuần, cần escape; "html"/"xhtml" giữ nguyên
+				const content = raw == null ? null : type === "html" || type === "xhtml" ? raw : textToHtml(raw);
+
 				return {
 					guid: entry.id ?? null,
 					url: link,
 					title: entry.title?.value ?? null,
-					content: entry.content?.value ?? entry.summary?.value ?? null,
+					content,
 					publishedAt: entry.published ?? entry.updated ?? null,
 				};
 			});
@@ -106,7 +126,7 @@ function extractItems(body: string): RawItem[] {
 				guid: it.id ?? null,
 				url: it.url ?? it.external_url ?? null,
 				title: it.title ?? null,
-				content: it.content_html ?? it.content_text ?? null,
+				content: it.content_html ?? (it.content_text ? textToHtml(it.content_text) : null),
 				publishedAt: it.date_published ?? it.date_modified ?? null,
 			}));
 		}
@@ -116,15 +136,22 @@ function extractItems(body: string): RawItem[] {
 	}
 }
 
-function toHttpUrl(raw: string | null): string | null {
+// base: URL của feed, dùng để resolve link tương đối (vd "/post/1")
+function toHttpUrl(raw: string | null, base: string): string | null {
 	if (!raw) return null;
 	try {
-		const u = new URL(raw.trim());
+		const u = new URL(raw.trim(), base);
 		if (u.protocol !== "http:" && u.protocol !== "https:") return null;
 		return normalizeUrl(u.toString());
 	} catch {
 		return null;
 	}
+}
+
+// Bỏ ngày ở tương lai xa để bài không bị ghim đầu danh sách
+function sanitizePublishedAt(d: Date | null, now: number): Date | null {
+	if (!d || Number.isNaN(d.getTime())) return null;
+	return d.getTime() <= now + MAX_FUTURE_MS ? d : null;
 }
 
 // * Sync
@@ -150,18 +177,19 @@ export async function syncFeed(db: Db, row: FeedRow): Promise<SyncResult> {
 		throw e; // FeedSyncError hoặc lỗi bất ngờ -> để router xử lý
 	}
 
+	const now = Date.now();
 	const values = rawItems.flatMap((it) => {
-		const url = toHttpUrl(it.url);
+		const url = toHttpUrl(it.url, row.url);
 		if (!url) return []; // bỏ bài không có link hợp lệ
 		return [
 			{
 				feedId: row.id,
 				guid: it.guid?.trim() || null,
 				url,
-				title: it.title?.trim() || url,
+				title: htmlToPlainText(it.title) ?? url,
 				// contentClean: để pipeline làm sạch HTML xử lý sau (sanitize + trích text)
 				contentRaw: it.content,
-				publishedAt: it.publishedAt,
+				publishedAt: sanitizePublishedAt(it.publishedAt, now),
 			},
 		];
 	});

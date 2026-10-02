@@ -1,5 +1,5 @@
-import { lookup } from "node:dns/promises";
-import { isIP } from "node:net";
+import got, { HTTPError, MaxRedirectsError, type PlainResponse, TimeoutError } from "got";
+import { RequestFilteringHttpAgent, RequestFilteringHttpsAgent } from "request-filtering-agent";
 
 export type FeedSyncErrorCode = "BLOCKED_URL" | "TIMEOUT" | "NETWORK" | "HTTP_ERROR" | "TOO_LARGE" | "INVALID_FEED";
 
@@ -15,84 +15,14 @@ export class FeedSyncError extends Error {
 
 const TIMEOUT_MS = 10_000;
 const MAX_REDIRECTS = 3;
-
-// * SSRF guard
-
-function isPrivateIp(ip: string): boolean {
-	if (ip.includes(":")) {
-		const l = ip.toLowerCase();
-		if (l === "::1" || l === "::") return true;
-		if (l.startsWith("::ffff:")) return isPrivateIp(l.slice(7)); // IPv4-mapped
-		if (l.startsWith("fc") || l.startsWith("fd")) return true; // unique local
-		if (/^fe[89ab]/.test(l)) return true; // link-local
-		return false;
-	}
-	const [a = 0, b = 0] = ip.split(".").map(Number);
-	return (
-		a === 0 ||
-		a === 10 ||
-		a === 127 ||
-		(a === 100 && b >= 64 && b <= 127) || // CGNAT
-		(a === 169 && b === 254) || // link-local + cloud metadata
-		(a === 172 && b >= 16 && b <= 31) ||
-		(a === 192 && b === 168) ||
-		a >= 224 // multicast + reserved
-	);
-}
-
-async function assertPublicUrl(raw: string): Promise<void> {
-	let url: URL;
-	try {
-		url = new URL(raw);
-	} catch {
-		throw new FeedSyncError("BLOCKED_URL", "Invalid URL.");
-	}
-	if (url.protocol !== "http:" && url.protocol !== "https:") {
-		throw new FeedSyncError("BLOCKED_URL", "Only http/https URLs are allowed.");
-	}
-
-	const host = url.hostname.replace(/^\[|\]$/g, "");
-	const addrs = isIP(host)
-		? [{ address: host }]
-		: await lookup(host, { all: true }).catch(() => {
-				throw new FeedSyncError("NETWORK", "Could not resolve host.");
-			});
-
-	if (addrs.length === 0 || addrs.some((a) => isPrivateIp(a.address))) {
-		throw new FeedSyncError("BLOCKED_URL", "This URL is not allowed.");
-	}
-}
-
-// * Fetch
-
 const FEED_MAX_BYTES = 5 * 1024 * 1024; // 5MB
 const PAGE_MAX_BYTES = 3 * 1024 * 1024; // 3MB
 
-function mapNetworkError(e: unknown, what: string): FeedSyncError {
-	if (e instanceof FeedSyncError) return e;
-	if (e instanceof Error && (e.name === "TimeoutError" || e.name === "AbortError")) {
-		return new FeedSyncError("TIMEOUT", `${what} took too long to respond.`);
-	}
-	return new FeedSyncError("NETWORK", `Could not reach the ${what.toLowerCase()}.`);
-}
-
-async function readLimited(res: Response, maxBytes: number, what: string): Promise<string> {
-	const reader = res.body?.getReader();
-	if (!reader) return "";
-	const chunks: Uint8Array[] = [];
-	let total = 0;
-	for (;;) {
-		const { done, value } = await reader.read();
-		if (done) break;
-		total += value.byteLength;
-		if (total > maxBytes) {
-			await reader.cancel();
-			throw new FeedSyncError("TOO_LARGE", `${what} is too large.`);
-		}
-		chunks.push(value);
-	}
-	return Buffer.concat(chunks).toString("utf8");
-}
+// Agent chặn IP private/loopback/link-local ngay lúc tạo socket (chống DNS rebinding, áp dụng cả cho mỗi redirect)
+const agent = {
+	http: new RequestFilteringHttpAgent(),
+	https: new RequestFilteringHttpsAgent(),
+};
 
 type GuardedOptions = {
 	headers: Record<string, string>;
@@ -101,47 +31,76 @@ type GuardedOptions = {
 	contentType?: RegExp; // nếu có, từ chối response không khớp trước khi đọc body
 };
 
-type GuardedResult = { notModified: true } | { notModified: false; body: string; res: Response };
+type GuardedResult = { notModified: true } | { notModified: false; body: string; res: PlainResponse };
 
-// Lõi chung: chặn IP nội bộ (kiểm tra lại sau mỗi redirect), timeout, giới hạn dung lượng
+function mapError(e: unknown, what: string): FeedSyncError {
+	if (e instanceof FeedSyncError) return e;
+	if (e instanceof TimeoutError) return new FeedSyncError("TIMEOUT", `${what} took too long to respond.`);
+	if (e instanceof HTTPError)
+		return new FeedSyncError("HTTP_ERROR", `${what} returned HTTP ${e.response.statusCode}.`);
+	if (e instanceof MaxRedirectsError) return new FeedSyncError("HTTP_ERROR", "Too many redirects.");
+	// request-filtering-agent ném lỗi có message "... is not allowed ..." khi gặp IP nội bộ
+	if (e instanceof Error && /is not allowed/i.test(e.message)) {
+		return new FeedSyncError("BLOCKED_URL", "This URL is not allowed.");
+	}
+	if (e instanceof Error && e.name === "UnsupportedProtocolError") {
+		return new FeedSyncError("BLOCKED_URL", "Only http/https URLs are allowed.");
+	}
+	return new FeedSyncError("NETWORK", `Could not reach the ${what.toLowerCase()}.`);
+}
+
 async function fetchGuarded(rawUrl: string, opts: GuardedOptions): Promise<GuardedResult> {
-	const signal = AbortSignal.timeout(TIMEOUT_MS);
-
-	let current = rawUrl;
-	for (let hop = 0; hop <= MAX_REDIRECTS; hop++) {
-		await assertPublicUrl(current);
-
-		try {
-			const res = await fetch(current, { redirect: "manual", signal, headers: opts.headers });
-
-			if (res.status === 304) return { notModified: true };
-
-			if (res.status >= 300 && res.status < 400) {
-				await res.body?.cancel();
-				const location = res.headers.get("location");
-				if (!location) throw new FeedSyncError("HTTP_ERROR", "Redirect without location.");
-				current = new URL(location, current).toString();
-				continue;
-			}
-
-			if (!res.ok) {
-				await res.body?.cancel();
-				throw new FeedSyncError("HTTP_ERROR", `${opts.what} returned HTTP ${res.status}.`);
-			}
-
-			if (opts.contentType && !opts.contentType.test(res.headers.get("content-type") ?? "")) {
-				await res.body?.cancel();
-				throw new FeedSyncError("HTTP_ERROR", `${opts.what} is not an HTML document.`);
-			}
-
-			const body = await readLimited(res, opts.maxBytes, opts.what);
-			return { notModified: false, body, res };
-		} catch (e) {
-			throw mapNetworkError(e, opts.what);
-		}
+	let url: URL;
+	try {
+		url = new URL(rawUrl);
+	} catch {
+		throw new FeedSyncError("BLOCKED_URL", "Invalid URL.");
+	}
+	if (url.protocol !== "http:" && url.protocol !== "https:") {
+		throw new FeedSyncError("BLOCKED_URL", "Only http/https URLs are allowed.");
 	}
 
-	throw new FeedSyncError("HTTP_ERROR", "Too many redirects.");
+	const stream = got.stream(url, {
+		agent,
+		headers: opts.headers,
+		timeout: { request: TIMEOUT_MS },
+		maxRedirects: MAX_REDIRECTS,
+		retry: { limit: 0 },
+	});
+
+	let res: PlainResponse | undefined;
+	let rejected: FeedSyncError | undefined;
+
+	stream.once("response", (r: PlainResponse) => {
+		res = r;
+		if (
+			r.statusCode !== 304 &&
+			opts.contentType &&
+			!opts.contentType.test(String(r.headers["content-type"] ?? ""))
+		) {
+			rejected = new FeedSyncError("HTTP_ERROR", `${opts.what} is not an HTML document.`);
+			stream.destroy();
+		}
+	});
+
+	try {
+		const chunks: Buffer[] = [];
+		let total = 0;
+		for await (const chunk of stream) {
+			total += (chunk as Buffer).byteLength;
+			if (total > opts.maxBytes) {
+				stream.destroy();
+				throw new FeedSyncError("TOO_LARGE", `${opts.what} is too large.`);
+			}
+			chunks.push(chunk as Buffer);
+		}
+		if (rejected) throw rejected;
+		if (!res) throw new FeedSyncError("NETWORK", `Could not reach the ${opts.what.toLowerCase()}.`);
+		if (res.statusCode === 304) return { notModified: true };
+		return { notModified: false, body: Buffer.concat(chunks).toString("utf8"), res };
+	} catch (e) {
+		throw rejected ?? mapError(e, opts.what);
+	}
 }
 
 export type SafeFetchResult =
@@ -165,8 +124,8 @@ export async function safeFetchFeed(
 	return {
 		notModified: false,
 		body: r.body,
-		etag: r.res.headers.get("etag"),
-		lastModified: r.res.headers.get("last-modified"),
+		etag: r.res.headers.etag ?? null,
+		lastModified: r.res.headers["last-modified"] ?? null,
 	};
 }
 

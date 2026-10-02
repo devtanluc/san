@@ -20,13 +20,17 @@
 		"ai": "catalog:",
 		"drizzle-orm": "catalog:",
 		"feedsmith": "^3.0.1",
+		"got": "^16.0.0",
+		"html-to-text": "^10.0.1",
 		"linkedom": "^0.18.13",
+		"request-filtering-agent": "^3.2.1",
 		"sanitize-html": "^2.18.0",
 		"superjson": "catalog:",
 		"zod": "catalog:"
 	},
 	"devDependencies": {
 		"@san/config": "workspace:*",
+		"@types/html-to-text": "^9.0.4",
 		"@types/sanitize-html": "^2.16.2",
 		"typescript": "catalog:"
 	}
