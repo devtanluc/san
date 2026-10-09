@@ -1,7 +1,8 @@
-import { pgTable, text, boolean, serial } from "drizzle-orm/pg-core";
+import { boolean, pgTable, text, timestamp, uuid } from "drizzle-orm/pg-core";
 
 export const todo = pgTable("todo", {
-  id: serial("id").primaryKey(),
-  text: text("text").notNull(),
-  completed: boolean("completed").default(false).notNull(),
+	id: uuid("id").primaryKey().defaultRandom(),
+	text: text("text").notNull(),
+	completed: boolean("completed").default(false).notNull(),
+	createdAt: timestamp("created_at", { mode: "string" }).notNull().defaultNow(),
 });

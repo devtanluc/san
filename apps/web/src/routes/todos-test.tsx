@@ -8,59 +8,50 @@ import {
 } from "@san/ui/components/card";
 import { Checkbox } from "@san/ui/components/checkbox";
 import { Input } from "@san/ui/components/input";
-import { useMutation, useQuery } from "@tanstack/react-query";
+import { useLiveQuery } from "@tanstack/react-db";
 import { createFileRoute } from "@tanstack/react-router";
 import { Loader2, Trash2 } from "lucide-react";
 import { type FormEvent, useState } from "react";
 
-import { trpc } from "@/utils/trpc";
+import { todoCollection } from "@/collections/todo";
 
-type TodoId = number;
-
-export const Route = createFileRoute("/todos")({
+export const Route = createFileRoute("/todos-test")({
 	component: TodosRoute,
 });
 
 function TodosRoute() {
 	const [newTodoText, setNewTodoText] = useState("");
 
-	const todos = useQuery(trpc.todo.getAll.queryOptions());
-	const createMutation = useMutation(
-		trpc.todo.create.mutationOptions({
-			onSuccess: () => {
-				todos.refetch();
-				setNewTodoText("");
-			},
-		}),
-	);
-	const toggleMutation = useMutation(
-		trpc.todo.toggle.mutationOptions({
-			onSuccess: () => {
-				todos.refetch();
-			},
-		}),
-	);
-	const deleteMutation = useMutation(
-		trpc.todo.delete.mutationOptions({
-			onSuccess: () => {
-				todos.refetch();
-			},
-		}),
+	// Live query: tự cập nhật khi collection đổi (kể cả thay đổi optimistic)
+	const { data: todos, isLoading } = useLiveQuery((q) =>
+		q
+			.from({ todo: todoCollection })
+			.orderBy(({ todo }) => todo.createdAt, "asc"),
 	);
 
 	const handleAddTodo = (e: FormEvent<HTMLFormElement>) => {
 		e.preventDefault();
-		if (newTodoText.trim()) {
-			createMutation.mutate({ text: newTodoText });
-		}
+		const text = newTodoText.trim();
+		if (!text) return;
+
+		// UI cập nhật ngay, tRPC chạy nền trong onInsert; lỗi thì tự rollback
+		todoCollection.insert({
+			id: crypto.randomUUID(),
+			text,
+			completed: false,
+			createdAt: new Date().toISOString(),
+		});
+		setNewTodoText("");
 	};
 
-	const handleToggleTodo = (id: TodoId, completed: boolean) => {
-		toggleMutation.mutate({ id, completed: !completed });
+	const handleToggleTodo = (id: string) => {
+		todoCollection.update(id, (draft) => {
+			draft.completed = !draft.completed;
+		});
 	};
 
-	const handleDeleteTodo = (id: TodoId) => {
-		deleteMutation.mutate({ id });
+	const handleDeleteTodo = (id: string) => {
+		todoCollection.delete(id);
 	};
 
 	return (
@@ -79,29 +70,21 @@ function TodosRoute() {
 							value={newTodoText}
 							onChange={(e) => setNewTodoText(e.target.value)}
 							placeholder="Add a new task..."
-							disabled={createMutation.isPending}
 						/>
-						<Button
-							type="submit"
-							disabled={createMutation.isPending || !newTodoText.trim()}
-						>
-							{createMutation.isPending ? (
-								<Loader2 className="h-4 w-4 animate-spin" />
-							) : (
-								"Add"
-							)}
+						<Button type="submit" disabled={!newTodoText.trim()}>
+							Add
 						</Button>
 					</form>
 
-					{todos.isLoading ? (
+					{isLoading ? (
 						<div className="flex justify-center py-4">
 							<Loader2 className="h-6 w-6 animate-spin" />
 						</div>
-					) : todos.data?.length === 0 ? (
+					) : todos.length === 0 ? (
 						<p className="py-4 text-center">No todos yet. Add one above!</p>
 					) : (
 						<ul className="space-y-2">
-							{todos.data?.map((todo) => (
+							{todos.map((todo) => (
 								<li
 									key={todo.id}
 									className="flex items-center justify-between rounded-md border p-2"
@@ -109,14 +92,12 @@ function TodosRoute() {
 									<div className="flex items-center space-x-2">
 										<Checkbox
 											checked={todo.completed}
-											onCheckedChange={() =>
-												handleToggleTodo(todo.id, todo.completed)
-											}
+											onCheckedChange={() => handleToggleTodo(todo.id)}
 											id={`todo-${todo.id}`}
 										/>
 										<label
 											htmlFor={`todo-${todo.id}`}
-											className={`${todo.completed ? "line-through" : ""}`}
+											className={todo.completed ? "line-through" : ""}
 										>
 											{todo.text}
 										</label>
